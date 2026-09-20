@@ -53,34 +53,36 @@ class MainActivity : AppCompatActivity() {
                         }
                         m.content = 'width=device-width, initial-scale=1.0';
 
-                        function hideAppsScriptBanner(root) {
+                        function hideGoogleChrome(root) {
                             var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
                             var node;
+                            var hidAny = false;
                             while (node = walker.nextNode()) {
-                                if (/created (this|the) app|application was created|created.*apps script/i.test(node.nodeValue)) {
+                                if (/created (this|the) app|application was created|created.*apps script|report abuse/i.test(node.nodeValue)) {
                                     var el = node.parentElement;
                                     for (var i = 0; el && i < 5; i++) {
                                         var rect = el.getBoundingClientRect();
                                         if (rect.top < 200 && rect.height > 0 && rect.height < 150) {
                                             el.style.display = 'none';
-                                            return true;
+                                            hidAny = true;
+                                            break;
                                         }
                                         el = el.parentElement;
                                     }
                                 }
                             }
-                            return false;
+                            return hidAny;
                         }
 
-                        if (!hideAppsScriptBanner(document.body)) {
-                            var observer = new MutationObserver(function() {
-                                if (hideAppsScriptBanner(document.body)) {
-                                    observer.disconnect();
-                                }
-                            });
-                            observer.observe(document.body, { childList: true, subtree: true });
-                            setTimeout(function() { observer.disconnect(); }, 5000);
-                        }
+                        // Run immediately, then keep watching briefly in case
+                        // Google injects the "report abuse" link separately
+                        // and asynchronously from the "created by" banner.
+                        hideGoogleChrome(document.body);
+                        var observer = new MutationObserver(function() {
+                            hideGoogleChrome(document.body);
+                        });
+                        observer.observe(document.body, { childList: true, subtree: true });
+                        setTimeout(function() { observer.disconnect(); }, 5000);
                     })();
                     """.trimIndent(),
                     null
