@@ -19,7 +19,7 @@ android {
         buildConfigField(
             "String",
             "WEB_APP_URL",
-            "\"https://script.google.com/macros/s/REPLACE_WITH_YOUR_DEPLOYMENT_ID/exec\""
+            "\"https://script.google.com/macros/s/AKfycbyxvPkeZBO-tC8lXF1uowtzl0JoRjglZOqb18GylIjdVqn8ix2gczAaF5dCFzUGnRyCIg/exec\""
         )
     }
 
