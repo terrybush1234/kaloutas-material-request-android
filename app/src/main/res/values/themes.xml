@@ -11,5 +11,6 @@
     <style name="Theme.KaloutasMaterialRequest.Splash" parent="Theme.KaloutasMaterialRequest">
         <item name="android:windowBackground">@color/splash_background</item>
         <item name="android:statusBarColor">@color/splash_background</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
     </style>
 </resources>

@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="brand_primary">#1565C0</color>
-    <color name="brand_primary_dark">#0D47A1</color>
-    <color name="brand_accent">#FFFFFF</color>
-    <color name="splash_background">#1565C0</color>
-    <color name="splash_text">#FFFFFF</color>
+    <color name="brand_navy">#083B70</color>
+    <color name="brand_navy_dark">#062A50</color>
+    <color name="brand_olive">#908D26</color>
+    <color name="brand_primary">@color/brand_navy</color>
+    <color name="brand_primary_dark">@color/brand_navy_dark</color>
+    <color name="brand_accent">@color/brand_olive</color>
+    <color name="splash_background">#FFFFFF</color>
+    <color name="splash_text">@color/brand_navy</color>
 </resources>
