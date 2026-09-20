@@ -19,7 +19,7 @@ android {
         buildConfigField(
             "String",
             "WEB_APP_URL",
-            "\"https://script.google.com/macros/s/AKfycbyxvPkeZBO-tC8lXF1uowtzl0JoRjglZOqb18GylIjdVqn8ix2gczAaF5dCFzUGnRyCIg/exec\""
+            "\"https://script.google.com/macros/s/AKfycbwXLhFqgEtKBQIUAIXX5ZBm5vNQ7mEHedWkq8PjMYbFLyATDqJ7sw0VbgCSd1sr9cSCqw/exec\""
         )
     }
 
