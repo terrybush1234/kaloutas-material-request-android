@@ -27,11 +27,32 @@ class MainActivity : AppCompatActivity() {
             domStorageEnabled = true
             loadWithOverviewMode = true
             useWideViewPort = true
+            builtInZoomControls = true
+            displayZoomControls = false
         }
 
         binding.webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
+                // The Apps Script form's own HTML doesn't declare a mobile
+                // viewport, so useWideViewPort/loadWithOverviewMode (needed
+                // for the page to lay out correctly at all) render it as a
+                // wide desktop page and zoom it down to fit, squeezing
+                // everything. Force a proper mobile viewport instead.
+                view.evaluateJavascript(
+                    """
+                    (function() {
+                        var m = document.querySelector('meta[name="viewport"]');
+                        if (!m) {
+                            m = document.createElement('meta');
+                            m.name = 'viewport';
+                            document.head.appendChild(m);
+                        }
+                        m.content = 'width=device-width, initial-scale=1.0';
+                    })();
+                    """.trimIndent(),
+                    null
+                )
                 binding.loadingProgress.visibility = View.GONE
                 binding.swipeRefresh.isRefreshing = false
             }
