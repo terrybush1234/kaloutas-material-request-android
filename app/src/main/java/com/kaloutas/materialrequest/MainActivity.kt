@@ -38,7 +38,10 @@ class MainActivity : AppCompatActivity() {
                 // viewport, so useWideViewPort/loadWithOverviewMode (needed
                 // for the page to lay out correctly at all) render it as a
                 // wide desktop page and zoom it down to fit, squeezing
-                // everything. Force a proper mobile viewport instead.
+                // everything. Force a proper mobile viewport instead, and
+                // hide the "This application was created by Google Apps
+                // Script" bar Google injects at the top of deployed web
+                // apps (it's Google's own chrome, not part of the form).
                 view.evaluateJavascript(
                     """
                     (function() {
@@ -49,6 +52,35 @@ class MainActivity : AppCompatActivity() {
                             document.head.appendChild(m);
                         }
                         m.content = 'width=device-width, initial-scale=1.0';
+
+                        function hideAppsScriptBanner(root) {
+                            var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+                            var node;
+                            while (node = walker.nextNode()) {
+                                if (/created (this|the) app|application was created|created.*apps script/i.test(node.nodeValue)) {
+                                    var el = node.parentElement;
+                                    for (var i = 0; el && i < 5; i++) {
+                                        var rect = el.getBoundingClientRect();
+                                        if (rect.top < 200 && rect.height > 0 && rect.height < 150) {
+                                            el.style.display = 'none';
+                                            return true;
+                                        }
+                                        el = el.parentElement;
+                                    }
+                                }
+                            }
+                            return false;
+                        }
+
+                        if (!hideAppsScriptBanner(document.body)) {
+                            var observer = new MutationObserver(function() {
+                                if (hideAppsScriptBanner(document.body)) {
+                                    observer.disconnect();
+                                }
+                            });
+                            observer.observe(document.body, { childList: true, subtree: true });
+                            setTimeout(function() { observer.disconnect(); }, 5000);
+                        }
                     })();
                     """.trimIndent(),
                     null
