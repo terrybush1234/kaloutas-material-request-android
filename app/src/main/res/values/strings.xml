@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kaloutas Material Request</string>
+    <string name="splash_tagline">Material Request Form</string>
+    <string name="error_no_connection">No internet connection. Please check your network and try again.</string>
+    <string name="action_retry">Retry</string>
+</resources>
