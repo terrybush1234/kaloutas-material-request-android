@@ -53,16 +53,35 @@ class MainActivity : AppCompatActivity() {
                         }
                         m.content = 'width=device-width, initial-scale=1.0';
 
+                        var chromePattern = /created (this|the) app|application was created|created.*apps script|report abuse|learn more/i;
+
                         function hideGoogleChrome(root) {
+                            var hidAny = false;
+
+                            // Individual links (Report Abuse / Learn more) are
+                            // usually small <a> tags near the top on their own;
+                            // hide them directly regardless of container size.
+                            var links = root.querySelectorAll('a');
+                            for (var j = 0; j < links.length; j++) {
+                                var link = links[j];
+                                var linkRect = link.getBoundingClientRect();
+                                if (linkRect.top < 250 && chromePattern.test(link.textContent)) {
+                                    link.style.display = 'none';
+                                    hidAny = true;
+                                }
+                            }
+
+                            // Also hide the small containing block for any
+                            // remaining matching text (e.g. the plain-text
+                            // "created by" sentence around the links).
                             var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
                             var node;
-                            var hidAny = false;
                             while (node = walker.nextNode()) {
-                                if (/created (this|the) app|application was created|created.*apps script|report abuse/i.test(node.nodeValue)) {
+                                if (chromePattern.test(node.nodeValue)) {
                                     var el = node.parentElement;
-                                    for (var i = 0; el && i < 5; i++) {
+                                    for (var i = 0; el && i < 6; i++) {
                                         var rect = el.getBoundingClientRect();
-                                        if (rect.top < 200 && rect.height > 0 && rect.height < 150) {
+                                        if (rect.top < 250 && rect.height > 0 && rect.height < 200) {
                                             el.style.display = 'none';
                                             hidAny = true;
                                             break;
