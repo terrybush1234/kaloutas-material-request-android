@@ -122,7 +122,12 @@ class MainActivity : AppCompatActivity() {
 
         binding.webView.webChromeClient = android.webkit.WebChromeClient()
 
-        binding.swipeRefresh.setOnRefreshListener { loadForm() }
+        // Pull-to-refresh reloads the whole page from scratch, wiping out
+        // anything typed into the form and resetting to its default tab.
+        // Scrolling up to reach a validation error at the top of a tab was
+        // triggering this accidentally, so disable the swipe gesture; the
+        // offline screen's retry button is still the way to reload.
+        binding.swipeRefresh.isEnabled = false
         binding.retryButton.setOnClickListener { loadForm() }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
