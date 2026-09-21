@@ -18,13 +18,13 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.kaloutas.materialrequest"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.kaloutas.materialrequest"
         minSdk = 24
-        targetSdk = 34
-        versionCode = 1
+        targetSdk = 36
+        versionCode = 2
         versionName = "1.0"
 
         // Replace with your published Apps Script Web App URL:
