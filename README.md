@@ -20,26 +20,20 @@ buildConfigField(
 
 with your real deployment URL.
 
-## 2. Replace the placeholder logo (optional)
+## 2. Logo / icon / splash
 
-The launcher icon and splash logo are simple generated vector drawables at:
-
-- `app/src/main/res/drawable/ic_launcher_background.xml`
-- `app/src/main/res/drawable/ic_launcher_foreground.xml`
-
-To use your real logo instead, use Android Studio's **New → Image Asset**
-wizard (right-click `res` → New → Image Asset) and point it at your logo
-image — it will regenerate the adaptive icon and all mipmap densities for
-you. For the splash screen image, drop a PNG into `res/drawable` and point
-`app/src/main/res/layout/activity_splash.xml`'s `splashLogo` `android:src`
-at it.
+The launcher icon and splash screen use the real Kaloutas logo, generated
+into `app/src/main/res/mipmap-*/` and `app/src/main/res/drawable/logo_splash.png`.
+To swap in an updated logo later, use Android Studio's **New → Image Asset**
+wizard (right-click `res` → New → Image Asset) for the launcher icon, and
+replace `logo_splash.png` for the splash screen.
 
 ## 3. Rename the app / form name (optional)
 
 Edit `app_name` and `splash_tagline` in
 `app/src/main/res/values/strings.xml`.
 
-## 4. Open and run
+## 4. Open and run (debug)
 
 Open this project folder in Android Studio (Iguana or newer), let it sync,
 then Run on a device/emulator (minSdk 24 / Android 7.0+).
@@ -51,3 +45,42 @@ From the command line:
 ```
 
 The debug APK is written to `app/build/outputs/apk/debug/`.
+
+## 5. Release build for Google Play
+
+Play Store requires a **signed release App Bundle (.aab)**, not the debug
+APK used above. The signing key is never committed to this repo.
+
+**One-time setup — generate your own signing key:**
+
+1. In Android Studio: **Build → Generate Signed Bundle / APK…**
+2. Choose **Android App Bundle**, click **Next**.
+3. Under "Key store path," click **Create new…**
+4. Save the `.jks` file **somewhere outside this project folder** (e.g. a
+   password manager's secure notes folder, or a dedicated secrets folder
+   you back up separately) — never inside the git repo. Fill in a strong
+   store password and key password, alias (e.g. `kaloutas-release-key`),
+   and validity of at least 25 years (Play requires the cert to stay valid
+   past October 2033).
+5. **Back this file up somewhere safe outside this repo.** If you lose it,
+   you can never publish another update to this app listing again — Google
+   cannot recover or reset it for you.
+6. Copy `keystore.properties.template` to `keystore.properties` (same
+   folder as this README) and fill in the path to your `.jks` file and the
+   passwords/alias you just chose. This file is gitignored — don't commit
+   it.
+
+**Every release after that**, just run:
+
+```
+./gradlew bundleRelease
+```
+
+The signed `.aab` is written to `app/build/outputs/bundle/release/`. Upload
+that file to **Play Console → your app → Production (or a testing track) →
+Create new release**.
+
+Each new version you upload needs a higher `versionCode` in
+`app/build.gradle.kts` (`versionName` is the human-readable version, e.g.
+`"1.1"`; `versionCode` is an internal integer that must increase every
+release, e.g. `2`, `3`, ...).
