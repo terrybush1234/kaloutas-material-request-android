@@ -2,11 +2,13 @@ package com.kaloutas.materialrequest
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.view.View
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
@@ -33,6 +35,10 @@ class MainActivity : AppCompatActivity() {
                 displayZoomControls = false
             }
             overScrollMode = View.OVER_SCROLL_NEVER
+            addJavascriptInterface(
+                NativeStore(getSharedPreferences("kaloutas_native", Context.MODE_PRIVATE)),
+                "KaloutasNative"
+            )
         }
 
         CookieManager.getInstance().apply {
@@ -165,5 +171,38 @@ class MainActivity : AppCompatActivity() {
         val capabilities =
             connectivityManager.getNetworkCapabilities(network) ?: return false
         return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    // Exposed to the page as window.KaloutasNative. Keeps the verified employee email
+    // and the last selected category on the device, so they survive closing the app
+    // even when the WebView's own storage doesn't hold on to them.
+    private class NativeStore(private val prefs: SharedPreferences) {
+
+        @JavascriptInterface
+        fun getCategory(): String = prefs.getString(KEY_CATEGORY, "").orEmpty()
+
+        @JavascriptInterface
+        fun saveCategory(value: String?) {
+            if (value != null && value in VALID_CATEGORIES) {
+                prefs.edit().putString(KEY_CATEGORY, value).apply()
+            }
+        }
+
+        @JavascriptInterface
+        fun getEmail(): String = prefs.getString(KEY_EMAIL, "").orEmpty()
+
+        @JavascriptInterface
+        fun saveEmail(value: String?) {
+            if (value != null && EMAIL_PATTERN.matches(value)) {
+                prefs.edit().putString(KEY_EMAIL, value).apply()
+            }
+        }
+
+        private companion object {
+            const val KEY_CATEGORY = "lastCategory"
+            const val KEY_EMAIL = "verifiedEmail"
+            val VALID_CATEGORIES = setOf("flooring", "fireproofing", "equipment", "paint")
+            val EMAIL_PATTERN = Regex("^[A-Za-z0-9._%+-]+@kaloutas\\.com$", RegexOption.IGNORE_CASE)
+        }
     }
 }
