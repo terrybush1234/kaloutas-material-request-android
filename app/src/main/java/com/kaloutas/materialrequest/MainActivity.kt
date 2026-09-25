@@ -209,11 +209,30 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Secret the server hands this device once it has been verified by code.
+        @JavascriptInterface
+        fun getToken(): String = prefs.getString(KEY_TOKEN, "").orEmpty()
+
+        @JavascriptInterface
+        fun saveToken(value: String?) {
+            if (value != null && TOKEN_PATTERN.matches(value)) {
+                prefs.edit().putString(KEY_TOKEN, value).apply()
+            }
+        }
+
+        // Called when the administrator unclaims this device: forget who it belongs to.
+        @JavascriptInterface
+        fun clearIdentity() {
+            prefs.edit().remove(KEY_EMAIL).remove(KEY_TOKEN).apply()
+        }
+
         private companion object {
             const val KEY_CATEGORY = "lastCategory"
             const val KEY_EMAIL = "verifiedEmail"
             const val KEY_PROFILE = "requesterProfile"
+            const val KEY_TOKEN = "deviceToken"
             const val MAX_PROFILE_LENGTH = 500
+            val TOKEN_PATTERN = Regex("^[A-Za-z0-9]{20,100}$")
             val VALID_CATEGORIES = setOf("flooring", "fireproofing", "equipment", "paint")
             val EMAIL_PATTERN = Regex("^[A-Za-z0-9._%+-]+@kaloutas\\.com$", RegexOption.IGNORE_CASE)
         }
