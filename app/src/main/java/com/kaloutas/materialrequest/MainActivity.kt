@@ -198,9 +198,22 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Requester name + phone as a small JSON string, e.g. {"name":"...","phone":"..."}
+        @JavascriptInterface
+        fun getProfile(): String = prefs.getString(KEY_PROFILE, "").orEmpty()
+
+        @JavascriptInterface
+        fun saveProfile(value: String?) {
+            if (value != null && value.length <= MAX_PROFILE_LENGTH && value.startsWith("{") && value.endsWith("}")) {
+                prefs.edit().putString(KEY_PROFILE, value).apply()
+            }
+        }
+
         private companion object {
             const val KEY_CATEGORY = "lastCategory"
             const val KEY_EMAIL = "verifiedEmail"
+            const val KEY_PROFILE = "requesterProfile"
+            const val MAX_PROFILE_LENGTH = 500
             val VALID_CATEGORIES = setOf("flooring", "fireproofing", "equipment", "paint")
             val EMAIL_PATTERN = Regex("^[A-Za-z0-9._%+-]+@kaloutas\\.com$", RegexOption.IGNORE_CASE)
         }
