@@ -24,7 +24,7 @@ android {
         applicationId = "com.kaloutas.materialrequest"
         minSdk = 24
         targetSdk = 36
-        versionCode = 45
+        versionCode = 46
         versionName = "1.0"
 
         // Replace with your published Apps Script Web App URL:
@@ -32,7 +32,7 @@ android {
         buildConfigField(
             "String",
             "WEB_APP_URL",
-            "\"https://script.google.com/macros/s/AKfycbxeBu3DH76GbyZS7ZyBQg6-PdMT6End1aZ-VwhruNq3I7zVYTiMiwQB9oe6c4ojNqUllg/exec\""
+            "\"https://script.google.com/macros/s/AKfycbx1MAnyC6NQcEGcFnWoYFYnJAbSOdop61UrDdJduRWOgbPsrP49NOZ7L-AcASooPp3Zbg/exec\""
         )
     }
 
