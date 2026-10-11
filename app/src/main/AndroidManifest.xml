@@ -24,10 +24,20 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="false"
+            android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:windowSoftInputMode="adjustResize"
-            android:label="@string/app_name" />
+            android:label="@string/app_name">
+            <!-- Lets a pending vendor request's review link (kaloutasapp://review?reqId=...)
+                 in the notification email open straight into this app instead of a browser,
+                 so the already-verified identity/device token carries over. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kaloutasapp" />
+            </intent-filter>
+        </activity>
 
     </application>
 

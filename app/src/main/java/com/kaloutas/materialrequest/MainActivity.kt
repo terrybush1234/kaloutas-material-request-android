@@ -2,6 +2,7 @@ package com.kaloutas.materialrequest
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -150,6 +151,14 @@ class MainActivity : AppCompatActivity() {
         loadForm()
     }
 
+    // The app may already be running when a review link is tapped, in which case
+    // Android delivers it here instead of a fresh onCreate — reload with the new reqId.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        loadForm()
+    }
+
     private fun loadForm() {
         if (!isNetworkAvailable()) {
             binding.offlineView.visibility = View.VISIBLE
@@ -161,7 +170,15 @@ class MainActivity : AppCompatActivity() {
         binding.offlineView.visibility = View.GONE
         binding.swipeRefresh.visibility = View.VISIBLE
         binding.loadingProgress.visibility = View.VISIBLE
-        binding.webView.loadUrl(BuildConfig.WEB_APP_URL)
+        val reqId = extractReqId(intent)
+        val targetUrl = if (reqId != null) "${BuildConfig.WEB_APP_URL}?reqId=$reqId" else BuildConfig.WEB_APP_URL
+        binding.webView.loadUrl(targetUrl)
+    }
+
+    // Pulls reqId out of a kaloutasapp://review?reqId=... deep link, if that's what launched us.
+    private fun extractReqId(intent: Intent?): String? {
+        val uri = intent?.data ?: return null
+        return if (uri.scheme == "kaloutasapp") uri.getQueryParameter("reqId") else null
     }
 
     private fun isNetworkAvailable(): Boolean {
