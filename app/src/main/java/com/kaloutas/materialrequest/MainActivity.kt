@@ -69,6 +69,11 @@ class MainActivity : AppCompatActivity() {
                         }
                         m.content = 'width=device-width, initial-scale=1.0';
 
+                        // Google's bar is the #warning row above the form's iframe; hide it outright.
+                        var hideBar = document.createElement('style');
+                        hideBar.textContent = '#warning, .warning-bar { display: none !important; }';
+                        document.head.appendChild(hideBar);
+
                         var chromePattern = /created (this|the) app|application was created|created.*apps script|report abuse|learn more/i;
 
                         function hideGoogleChrome(root) {
