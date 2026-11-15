@@ -12,6 +12,17 @@
         android:theme="@style/Theme.KaloutasMaterialRequest"
         android:supportsRtl="true">
 
+        <!-- Shares the camera's photo file (and PDFs saved on older Android) with the camera / PDF apps. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <activity
             android:name=".SplashActivity"
             android:exported="true"

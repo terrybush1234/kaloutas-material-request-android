@@ -1,24 +1,68 @@
 package com.kaloutas.materialrequest
 
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.print.PrintAttributes
+import android.print.PrintManager
+import android.provider.MediaStore
+import android.util.Base64
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import com.kaloutas.materialrequest.databinding.ActivityMainBinding
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+
+    // The page's file box (<input type="file">): the callback to answer, and the photo file the camera
+    // writes to when the camera is picked instead of the gallery / files.
+    private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private var cameraFile: File? = null
+    private var cameraUri: Uri? = null
+
+    // Kept while Android lays out a page for printing (the print job reads it after onPageFinished).
+    private var printWebView: WebView? = null
+
+    private val pickFiles = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val callback = fileCallback ?: return@registerForActivityResult
+        fileCallback = null
+        var uris: Array<Uri>? = null
+        if (result.resultCode == RESULT_OK) {
+            val data = result.data
+            val clip = data?.clipData
+            uris = when {
+                clip != null && clip.itemCount > 0 -> Array(clip.itemCount) { clip.getItemAt(it).uri }
+                data?.data != null -> arrayOf(data.data!!)
+                cameraUri != null && (cameraFile?.length() ?: 0L) > 0L -> arrayOf(cameraUri!!)
+                else -> null
+            }
+        }
+        cameraFile = null
+        cameraUri = null
+        // Always answered (null when cancelled), or the page's next tap would do nothing.
+        callback.onReceiveValue(uris)
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,6 +84,8 @@ class MainActivity : AppCompatActivity() {
                 NativeStore(getSharedPreferences("kaloutas_native", Context.MODE_PRIVATE)),
                 "KaloutasNative"
             )
+            // Print and Download PDF from the page (a WebView can't print an iframe or save a blob: link itself).
+            addJavascriptInterface(NativeDocs(), "KaloutasDocs")
         }
 
         CookieManager.getInstance().apply {
@@ -132,7 +178,39 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        binding.webView.webChromeClient = android.webkit.WebChromeClient()
+        // The page's photo / PDF buttons: open the gallery or files (what the page accepts), with the camera
+        // offered too when it asks for pictures.
+        binding.webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                webView: WebView,
+                callback: ValueCallback<Array<Uri>>,
+                params: FileChooserParams
+            ): Boolean {
+                fileCallback?.onReceiveValue(null)
+                fileCallback = callback
+                val accept = params.acceptTypes.filter { it.isNotBlank() }
+                val wantsImages = accept.isEmpty() || accept.any { it.startsWith("image") }
+                val pick = Intent(Intent.ACTION_GET_CONTENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = if (accept.size == 1) accept[0] else "*/*"
+                    if (accept.size > 1) putExtra(Intent.EXTRA_MIME_TYPES, accept.toTypedArray())
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params.mode == FileChooserParams.MODE_OPEN_MULTIPLE)
+                }
+                val extras = mutableListOf<Intent>()
+                if (wantsImages) cameraIntent()?.let { extras.add(it) }
+                val chooser = Intent.createChooser(pick, null).apply {
+                    if (extras.isNotEmpty()) putExtra(Intent.EXTRA_INITIAL_INTENTS, extras.toTypedArray())
+                }
+                return try {
+                    pickFiles.launch(chooser)
+                    true
+                } catch (e: ActivityNotFoundException) {
+                    fileCallback = null
+                    callback.onReceiveValue(null)
+                    false
+                }
+            }
+        }
 
         // Pull-to-refresh reloads the whole page from scratch, wiping out
         // anything typed into the form and resetting to its default tab.
@@ -184,6 +262,95 @@ class MainActivity : AppCompatActivity() {
     private fun extractReqId(intent: Intent?): String? {
         val uri = intent?.data ?: return null
         return if (uri.scheme == "kaloutasapp") uri.getQueryParameter("reqId") else null
+    }
+
+    // A camera intent that writes the photo to a temporary file (shared through the FileProvider), or null
+    // when the phone has no camera app. No CAMERA permission is needed: the camera app takes the picture.
+    private fun cameraIntent(): Intent? {
+        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+        if (intent.resolveActivity(packageManager) == null) return null
+        return try {
+            val dir = File(cacheDir, "camera").apply { mkdirs() }
+            val file = File.createTempFile("survey_", ".jpg", dir)
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            cameraFile = file
+            cameraUri = uri
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, uri)
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            intent
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    // Lays the page's printable HTML out in a hidden WebView and hands it to Android's print dialog.
+    private fun printHtml(html: String, title: String) {
+        val view = WebView(this)
+        printWebView = view
+        view.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(v: WebView, url: String) {
+                val manager = getSystemService(Context.PRINT_SERVICE) as PrintManager
+                val name = title.ifBlank { "JobLink" }
+                manager.print(name, v.createPrintDocumentAdapter(name), PrintAttributes.Builder().build())
+            }
+        }
+        view.settings.javaScriptEnabled = false
+        view.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+    }
+
+    // Saves a PDF the page made into the phone's Downloads folder, then offers to open it.
+    private fun savePdf(base64: String, name: String) {
+        val clean = name.replace(Regex("[\\\\/:*?\"<>|]+"), " ").trim().ifBlank { "JobLink" }
+        val fileName = if (clean.endsWith(".pdf", ignoreCase = true)) clean else "$clean.pdf"
+        try {
+            val bytes = Base64.decode(base64, Base64.DEFAULT)
+            val uri: Uri
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(MediaStore.Downloads.MIME_TYPE, "application/pdf")
+                    put(MediaStore.Downloads.IS_PENDING, 1)
+                }
+                uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IllegalStateException("Downloads is not available")
+                contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                values.clear()
+                values.put(MediaStore.Downloads.IS_PENDING, 0)
+                contentResolver.update(uri, values, null, null)
+            } else {
+                val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir
+                val file = File(dir, fileName)
+                file.writeBytes(bytes)
+                uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            }
+            Toast.makeText(this, "Saved $fileName to Downloads", Toast.LENGTH_LONG).show()
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/pdf")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+            } catch (e: ActivityNotFoundException) {
+                // No PDF viewer: the file is still in Downloads.
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Could not save the PDF: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // Exposed to the page as window.KaloutasDocs. Calls arrive on a background thread, so they move to the
+    // main thread; sizes are capped so a page can't hand over anything unreasonable.
+    private inner class NativeDocs {
+        @JavascriptInterface
+        fun print(html: String?, title: String?) {
+            if (html == null || html.length > MAX_DOC_CHARS) return
+            runOnUiThread { printHtml(html, (title ?: "").take(120)) }
+        }
+
+        @JavascriptInterface
+        fun savePdf(base64: String?, name: String?) {
+            if (base64 == null || base64.length > MAX_DOC_CHARS) return
+            runOnUiThread { savePdf(base64, (name ?: "").take(120)) }
+        }
     }
 
     private fun isNetworkAvailable(): Boolean {
@@ -258,5 +425,10 @@ class MainActivity : AppCompatActivity() {
             val VALID_CATEGORIES = setOf("flooring", "fireproofing", "equipment", "paint")
             val EMAIL_PATTERN = Regex("^[A-Za-z0-9._%+-]+@kaloutas\\.com$", RegexOption.IGNORE_CASE)
         }
+    }
+
+    private companion object {
+        // A survey page or PDF with its pictures, as text: up to about 40 MB.
+        const val MAX_DOC_CHARS = 40_000_000
     }
 }
