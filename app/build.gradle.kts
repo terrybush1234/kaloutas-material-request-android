@@ -24,7 +24,7 @@ android {
         applicationId = "com.kaloutas.materialrequest"
         minSdk = 24
         targetSdk = 36
-        versionCode = 79
+        versionCode = 80
         versionName = "1.1"
 
         // Replace with your published Apps Script Web App URL:

@@ -6,6 +6,10 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -29,7 +33,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import com.kaloutas.materialrequest.databinding.ActivityMainBinding
+import org.json.JSONArray
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStream
 
 class MainActivity : AppCompatActivity() {
 
@@ -45,7 +52,7 @@ class MainActivity : AppCompatActivity() {
     private var printWebView: WebView? = null
 
     private val pickFiles = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val callback = fileCallback ?: return@registerForActivityResult
+        val callback = fileCallback
         fileCallback = null
         var uris: Array<Uri>? = null
         if (result.resultCode == RESULT_OK) {
@@ -58,15 +65,27 @@ class MainActivity : AppCompatActivity() {
                 else -> null
             }
         }
+        if (callback == null) {
+            // The phone closed JobLink while the camera or gallery was open (to free memory), so the page that
+            // asked is gone. Keep the pictures; the page takes them when it opens again (takePendingPhotos).
+            uris?.forEach { keepPending(it) }
+            cameraFile?.delete()
+        }
         cameraFile = null
         cameraUri = null
         // Always answered (null when cancelled), or the page's next tap would do nothing.
-        callback.onReceiveValue(uris)
+        callback?.onReceiveValue(uris)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Started again after the phone closed it while the camera was open: where the camera is writing the photo.
+        savedInstanceState?.getString(STATE_CAMERA_FILE)?.let { path ->
+            val f = File(path)
+            cameraFile = f
+            cameraUri = try { FileProvider.getUriForFile(this, "$packageName.fileprovider", f) } catch (e: Exception) { null }
+        }
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -234,6 +253,62 @@ class MainActivity : AppCompatActivity() {
         loadForm()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        cameraFile?.let { outState.putString(STATE_CAMERA_FILE, it.absolutePath) }
+    }
+
+    // A picture kept for the page after a restart: made smaller (longest side 1600 px, JPEG, turned upright as the
+    // camera recorded it) and saved in the app's cache until the page takes it.
+    private fun keepPending(uri: Uri) {
+        try {
+            val open = { contentResolver.openInputStream(uri) ?: throw IllegalStateException("cannot read") }
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            open().use { BitmapFactory.decodeStream(it, null, bounds) }
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= PENDING_MAX_SIDE) sample *= 2
+            var bmp = open().use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return
+            val turn = open().use { exifDegrees(it) }
+            val k = minOf(1f, PENDING_MAX_SIDE.toFloat() / maxOf(bmp.width, bmp.height))
+            if (k < 1f || turn != 0) {
+                val m = Matrix().apply { if (k < 1f) postScale(k, k); if (turn != 0) postRotate(turn.toFloat()) }
+                bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
+            }
+            val dir = File(cacheDir, "pending").apply { mkdirs() }
+            File(dir, "p_" + System.currentTimeMillis() + "_" + (dir.list()?.size ?: 0) + ".jpg").outputStream().use {
+                bmp.compress(Bitmap.CompressFormat.JPEG, 75, it)
+            }
+        } catch (e: Exception) {
+            // Not a picture or not readable: nothing to keep.
+        }
+    }
+
+    private fun exifDegrees(stream: InputStream): Int = try {
+        when (ExifInterface(stream).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270
+            else -> 0
+        }
+    } catch (e: Exception) { 0 }
+
+    // The kept pictures (a day old at most) as data: URLs, removed once handed over.
+    private fun takePending(): String {
+        val out = JSONArray()
+        val files = File(cacheDir, "pending").listFiles()?.sortedBy { it.name } ?: return out.toString()
+        val now = System.currentTimeMillis()
+        files.forEach { f ->
+            if (now - f.lastModified() < 24L * 3600 * 1000) {
+                val b = ByteArrayOutputStream()
+                f.inputStream().use { it.copyTo(b) }
+                out.put("data:image/jpeg;base64," + Base64.encodeToString(b.toByteArray(), Base64.NO_WRAP))
+            }
+            f.delete()
+        }
+        return out.toString()
+    }
+
     // The app may already be running when a review link is tapped, in which case
     // Android delivers it here instead of a fresh onCreate — reload with the new reqId.
     override fun onNewIntent(intent: Intent) {
@@ -351,6 +426,13 @@ class MainActivity : AppCompatActivity() {
             if (base64 == null || base64.length > MAX_DOC_CHARS) return
             runOnUiThread { savePdf(base64, (name ?: "").take(120)) }
         }
+
+        // Pictures taken while the phone had closed the app (see pickFiles): how many wait, and handing them over.
+        @JavascriptInterface
+        fun pendingPhotoCount(): Int = File(cacheDir, "pending").list()?.size ?: 0
+
+        @JavascriptInterface
+        fun takePendingPhotos(): String = takePending()
     }
 
     private fun isNetworkAvailable(): Boolean {
@@ -430,5 +512,7 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         // A survey page or PDF with its pictures, as text: up to about 40 MB.
         const val MAX_DOC_CHARS = 40_000_000
+        const val STATE_CAMERA_FILE = "cameraFile"
+        const val PENDING_MAX_SIDE = 1600
     }
 }
